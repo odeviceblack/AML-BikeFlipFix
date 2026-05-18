@@ -8,9 +8,12 @@
 #include <aml-psdk/game_sa/Events.h>
 #include <inttypes.h>
 
-MYMODCFGNAME(DeviceBlack.BikeFlipFix, BikeFlipFix, 1.0, DeviceBlack, BikeFlipFix)
+MYMODCFGNAME(DeviceBlack.BikeFlipFix, BikeFlipFix, 1.1, DeviceBlack, BikeFlipFix)
 
 uintptr_t g_libGTASA = 0;
+
+static void* (*CPad_GetPad)(int) = nullptr;
+static int (*CPad_GetSteeringUpDown)(void*) = nullptr;
 
 void OnGameProcess(); // forward declaration (goto ln. 65)
 float fRotationVelocity = 0.0f; // value coming from the configuration file
@@ -27,6 +30,9 @@ ON_MOD_LOAD() {
 
 	fRotationVelocity = cfg->Bind("RotationVelocity", 0.00125f)->GetFloat();
 
+	SET_TO(CPad_GetPad, aml->GetSym(g_libGTASA, "_ZN4CPad6GetPadEi"));
+	SET_TO(CPad_GetSteeringUpDown, aml->GetSym(g_libGTASA, "_ZN4CPad17GetSteeringUpDownEv"));
+
     Events::gameProcessEvent += OnGameProcess;
 }
 
@@ -39,11 +45,10 @@ ON_MOD_LOAD() {
 
 // Input
 static inline int GetSteeringUpDown(int pad) {
-	using GetPad_t = void* (*)(int);
-	using GetSteer_t = int (*)(void*);
+	void* v_pad = CPad_GetPad(pad);
+	if(!v_pad) return 0;
 
-	void* vPad = ((GetPad_t)(g_libGTASA + BYBIT(0x3F8CA4, 0x4DB628)))(pad);
-	return ((GetSteer_t)(g_libGTASA + BYBIT(0x3F9CD4, 0x4DC70C)))(vPad);
+	return CPad_GetSteeringUpDown(v_pad);
 }
 
 // Math
