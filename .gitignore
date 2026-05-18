@@ -1,0 +1,6 @@
+*.mk
+config
+include/mod/*
+include/aml-psdk/*
+dump.txt
+.gitignore
