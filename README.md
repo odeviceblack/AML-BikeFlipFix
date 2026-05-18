@@ -6,6 +6,8 @@ A GTA San Andreas Android mod that restores proper mid-air pitch control for bik
 
 In the Android version of GTA San Andreas, bikes and BMXs lose the ability to pitch forward or backward while airborne — stick input for flipping is simply ignored mid-air. **BikeFlipFix** corrects this by hooking into the game's physics loop and directly applying the player's vertical steering input as rotational force whenever the vehicle leaves the ground.
 
+https://github.com/user-attachments/assets/b1cb0043-64b4-4bda-975a-1b2c87fa1636
+
 ## How It Works
 
 Every game frame, the mod evaluates two conditions:
