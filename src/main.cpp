@@ -1,98 +1,49 @@
-// -------------------------------------------
-// ------------- [ MOD STARTUP ] -------------
-// -------------------------------------------
-#include <mod/amlmod.h>
-#include <mod/config.h>
-#include <mod/logger.h>
-#include <aml-psdk/game_sa/plugin.h>
-#include <aml-psdk/game_sa/Events.h>
-#include <inttypes.h>
+#include "main.hpp"
+#include "mod.hpp"
 
-MYMODCFGNAME(DeviceBlack.BikeFlipFix, BikeFlipFix, 1.1, DeviceBlack, BikeFlipFix)
+MYMODCFGNAME(DeviceBlack.BikeFlipFix, BikeFlipFix, 2.0, DeviceBlack, BikeFlipFix)
+
+namespace Main {
 
 uintptr_t g_libGTASA = 0;
+ModConfig g_modConfig;
 
-static void* (*CPad_GetPad)(int) = nullptr;
-static int (*CPad_GetSteeringUpDown)(void*) = nullptr;
+static void LoadConfig() {
+	g_modConfig.maxRotationSpeed = cfg->Bind("MaxRotationSpeed", 0.002f)->GetFloat();
+	g_modConfig.phase1Multiplier = cfg->Bind("Phase1Multiplier", 1.0f)->GetFloat();
+	g_modConfig.phase2Multiplier = cfg->Bind("Phase2Multiplier", 0.3f)->GetFloat();
+	g_modConfig.phase3Multiplier = cfg->Bind("Phase3Multiplier", 0.5f)->GetFloat();
+	g_modConfig.rotationTransitionTime = cfg->Bind("RotationTransitionTime", 0.3f)->GetFloat();
 
-void OnGameProcess(); // forward declaration (goto ln. 65)
-float fRotationVelocity = 0.0f; // value coming from the configuration file
+	// Clamp para evitar valores inválidos
+	if(g_modConfig.maxRotationSpeed <= 0.f) g_modConfig.maxRotationSpeed = 0.0f;
+	if(g_modConfig.phase1Multiplier <= 0.f) g_modConfig.phase1Multiplier = 0.0f;
+	if(g_modConfig.phase2Multiplier <= 0.f) g_modConfig.phase2Multiplier = 0.0f;
+	if(g_modConfig.phase3Multiplier <= 0.f) g_modConfig.phase3Multiplier = 0.0f;
+	if(g_modConfig.rotationTransitionTime < 0.f) g_modConfig.rotationTransitionTime = 0.0f;
 
-ON_MOD_LOAD() {
-    g_libGTASA = aml->GetLib("libGTASA.so");
-
-    if(g_libGTASA) {
-        logger->Info("Game library loaded successfully! [0x%" PRIXPTR "]", g_libGTASA);
-    } else {
-        logger->Error("Failed to load the game library!");
-        return;
-    }
-
-	fRotationVelocity = cfg->Bind("RotationVelocity", 0.00125f)->GetFloat();
-
-	SET_TO(CPad_GetPad, aml->GetSym(g_libGTASA, "_ZN4CPad6GetPadEi"));
-	SET_TO(CPad_GetSteeringUpDown, aml->GetSym(g_libGTASA, "_ZN4CPad17GetSteeringUpDownEv"));
-
-    Events::gameProcessEvent += OnGameProcess;
-}
-
-// -------------------------------------------
-// ---------- [ MODIFICATION CODE ] ----------
-// -------------------------------------------
-#include <aml-psdk/game_sa/base/Matrix.h>
-#include <aml-psdk/game_sa/entity/PlayerPed.h>
-#include <aml-psdk/game_sa/entity/Vehicle.h>
-
-// Input
-static inline int GetSteeringUpDown(int pad) {
-	void* v_pad = CPad_GetPad(pad);
-	if(!v_pad) return 0;
-
-	return CPad_GetSteeringUpDown(v_pad);
-}
-
-// Math
-static inline CVector LocalToWorld(CMatrix* m, const CVector& v) {
-	return CVector(
-		m->GetRight().x * v.x + m->GetForward().x * v.y + m->GetUp().x * v.z,
-		m->GetRight().y * v.x + m->GetForward().y * v.y + m->GetUp().y * v.z,
-		m->GetRight().z * v.x + m->GetForward().z * v.y + m->GetUp().z * v.z
+	logger->Info(
+		"Config loaded — MaxRotationSpeed: %.5f | Phases: %.2f / %.2f / %.2f | TransitionTime: %.2f",
+		g_modConfig.maxRotationSpeed,
+		g_modConfig.phase1Multiplier,
+		g_modConfig.phase2Multiplier,
+		g_modConfig.phase3Multiplier,
+		g_modConfig.rotationTransitionTime
 	);
 }
 
-// Helpers
-static inline bool IsValidVehicleForMod(CVehicle* v) {
-	if(!v) return false;
-	if(!v->IsSubBMX() && !v->IsSubBike()) return false;
-	return true;
-}
+ON_MOD_LOAD() {
+	g_libGTASA = aml->GetLib("libGTASA.so");
 
-static inline bool HasGroundContact(CVehicle* v) {
-	return v->GetNumContactWheels() != 0;
-}
-
-// Main mod logic
-void OnGameProcess() {
-	CPlayerPed* player = FindPlayerPed(0);
-	if(!player) return;
-
-	CVehicle* veh = FindPlayerVehicle(0, false);
-	if(!IsValidVehicleForMod(veh)) return;
-
-	// If it's on the ground → default game behavior
-	if(HasGroundContact(veh)) {
-		veh->m_nStatus = STATUS_PLAYER;
+	if(!g_libGTASA) {
+		logger->Error("Failed to load the game library!");
 		return;
 	}
 
-	// Active physics to allow manipulation of turn speed.
-	veh->m_nStatus = STATUS_PHYSICS;
+	logger->Info("Game library loaded successfully! [0x%" PRIXPTR "]", g_libGTASA);
 
-	veh->m_vecTurnSpeed = LocalToWorld(
-		veh->GetMatrix(),
-		CVector(
-			GetSteeringUpDown(0) * fRotationVelocity,
-			0.0f, 0.0f
-		)
-	);
+	LoadConfig();
+	Mod::Setup();
 }
+
+} // namespace Main
